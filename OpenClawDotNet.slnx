@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="OpenClaw.DashboardLite/OpenClaw.DashboardLite.csproj" />
+  <Project Path="OpenClaw.GatewayClient/OpenClaw.GatewayClient.csproj" />
+  <Project Path="OpenClaw.McpServer/OpenClaw.McpServer.csproj" />
+  <Project Path="OpenClaw.ProxyApi/OpenClaw.ProxyApi.csproj" />
+</Solution>
