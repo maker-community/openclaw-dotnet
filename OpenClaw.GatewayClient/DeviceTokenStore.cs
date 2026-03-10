@@ -42,4 +42,17 @@ public sealed class DeviceTokenStore
 
     try { File.SetUnixFileMode(_path, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
   }
+
+  public void Remove(string deviceId)
+  {
+    var all = LoadAll();
+    if (!all.Remove(deviceId)) return;
+
+    var dir = Path.GetDirectoryName(_path);
+    if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
+    var json = JsonSerializer.Serialize(all, new JsonSerializerOptions { WriteIndented = true });
+    File.WriteAllText(_path, json + "\n");
+
+    try { File.SetUnixFileMode(_path, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
+  }
 }

@@ -97,7 +97,6 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
       : null;
 
     var authToken = deviceToken ?? _token;
-    var authSource = string.IsNullOrWhiteSpace(deviceToken) ? "gatewayToken" : "deviceToken";
     if (string.IsNullOrWhiteSpace(authToken))
       throw new InvalidOperationException("token is required (either gateway token or stored deviceToken)");
 
@@ -106,54 +105,81 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
     var platform = GetNormalizedPlatform();
     var scopesCsv = string.Join(",", scopes);
 
-    // v2 signature: v2|deviceId|clientId|mode|role|scopes|signedAt|token|nonce
-    // (v2 remains accepted; v3 format is not yet publicly specified in full)
-    var sigPayload = string.Join("|",
-      "v2", _deviceIdentity.DeviceId, clientId, mode, role, scopesCsv,
-      signedAtMs.ToString(), authToken, nonce);
-    var signature = _deviceIdentity.SignBase64Url(sigPayload);
-
     var clientVersion = typeof(OpenClawGatewayClient).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
-    var connect = new ConnectParams(
-      MinProtocol: OpenClawDefaults.ProtocolVersion,
-      MaxProtocol: OpenClawDefaults.ProtocolVersion,
-      Client: new ClientInfo(
-        Id: clientId,
-        Version: clientVersion,
-        Platform: platform,
-        Mode: mode,
-        InstanceId: Guid.NewGuid().ToString()
-      ),
-      Caps: Array.Empty<string>(),
-      Auth: new AuthInfo(Token: authToken),
-      Role: role,
-      Scopes: scopes,
-      Commands: Array.Empty<string>(),
-      Permissions: new Dictionary<string, bool>(),
-      Locale: System.Globalization.CultureInfo.CurrentCulture.Name,
-      UserAgent: $"openclaw-dotnet/{clientVersion}",
-      Device: new DeviceProof(
-        Id: _deviceIdentity.DeviceId,
-        PublicKey: _deviceIdentity.PublicKeyRawBase64Url,
-        Signature: signature,
-        SignedAt: signedAtMs,
-        Nonce: nonce
-      )
-    );
+
+    ConnectParams BuildConnect(string token)
+    {
+      // v2 signature: v2|deviceId|clientId|mode|role|scopes|signedAt|token|nonce
+      // (v2 remains accepted; v3 format is not yet publicly specified in full)
+      var sigPayload = string.Join("|",
+        "v2", _deviceIdentity.DeviceId, clientId, mode, role, scopesCsv,
+        signedAtMs.ToString(), token, nonce);
+      var signature = _deviceIdentity.SignBase64Url(sigPayload);
+
+      return new ConnectParams(
+        MinProtocol: OpenClawDefaults.ProtocolVersion,
+        MaxProtocol: OpenClawDefaults.ProtocolVersion,
+        Client: new ClientInfo(
+          Id: clientId,
+          Version: clientVersion,
+          Platform: platform,
+          Mode: mode,
+          InstanceId: Guid.NewGuid().ToString()
+        ),
+        Caps: Array.Empty<string>(),
+        Auth: new AuthInfo(Token: token),
+        Role: role,
+        Scopes: scopes,
+        Commands: Array.Empty<string>(),
+        Permissions: new Dictionary<string, bool>(),
+        Locale: System.Globalization.CultureInfo.CurrentCulture.Name,
+        UserAgent: $"openclaw-dotnet/{clientVersion}",
+        Device: new DeviceProof(
+          Id: _deviceIdentity.DeviceId,
+          PublicKey: _deviceIdentity.PublicKeyRawBase64Url,
+          Signature: signature,
+          SignedAt: signedAtMs,
+          Nonce: nonce
+        )
+      );
+    }
+
+    async Task<HelloOk> ConnectWithTokenAsync(string token, string source)
+    {
+      try
+      {
+        return await CallAsync<HelloOk>("connect", BuildConnect(token), ct);
+      }
+      catch (InvalidOperationException ex)
+      {
+        var deviceId = _deviceIdentity.DeviceId;
+        var deviceIdShort = deviceId.Length > 8 ? $"{deviceId[..8]}..." : deviceId;
+        throw new InvalidOperationException(
+          $"{ex.Message} (authSource={source}, token={MaskToken(token)}, deviceId={deviceIdShort})",
+          ex
+        );
+      }
+    }
 
     HelloOk hello;
+    var usedToken = authToken;
+    var usedSource = string.IsNullOrWhiteSpace(deviceToken) ? "gatewayToken" : "deviceToken";
+
     try
     {
-      hello = await CallAsync<HelloOk>("connect", connect, ct);
+      hello = await ConnectWithTokenAsync(authToken, usedSource);
     }
-    catch (InvalidOperationException ex)
+    catch (InvalidOperationException ex) when (
+      usedSource == "deviceToken" &&
+      !string.IsNullOrWhiteSpace(_token) &&
+      !string.Equals(_token, deviceToken, StringComparison.Ordinal) &&
+      ex.Message.Contains("gateway token mismatch", StringComparison.OrdinalIgnoreCase)
+    )
     {
-      var deviceId = _deviceIdentity.DeviceId;
-      var deviceIdShort = deviceId.Length > 8 ? $"{deviceId[..8]}..." : deviceId;
-      throw new InvalidOperationException(
-        $"{ex.Message} (authSource={authSource}, token={MaskToken(authToken)}, deviceId={deviceIdShort})",
-        ex
-      );
+      _deviceTokenStore.Remove(_deviceIdentity.DeviceId);
+      usedToken = _token!;
+      usedSource = "gatewayToken(fallback)";
+      hello = await ConnectWithTokenAsync(usedToken, usedSource);
     }
 
     if (!string.Equals(hello.Type, "hello-ok", StringComparison.OrdinalIgnoreCase))
