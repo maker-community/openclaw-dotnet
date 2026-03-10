@@ -1,39 +1,20 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">OpenClaw.DashboardLite</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
+﻿<MudStack Class="nav-wrap" Spacing="2">
+  <MudStack Spacing="0" Class="brand-wrap">
+    <MudText Typo="Typo.caption" Class="brand-sub">Gateway Workspace</MudText>
+    <MudText Typo="Typo.h6" Class="brand-title">Dashboard Lite</MudText>
+  </MudStack>
 
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
-    </nav>
-</div>
+  <MudNavMenu Rounded="true" Bordered="false" Dense="false">
+    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">
+      Overview
+    </MudNavLink>
+    <MudNavLink Href="/gateway" Icon="@Icons.Material.Filled.Hub">
+      Gateway Console
+    </MudNavLink>
+  </MudNavMenu>
 
-@code {
-    private bool collapseNavMenu = true;
-
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
-    }
-}
+  <MudPaper Class="help-card" Elevation="0">
+    <MudText Typo="Typo.subtitle2">Mobile Tips</MudText>
+    <MudText Typo="Typo.body2">使用侧边菜单切换到 Gateway Console，输入 API 地址后即可调用与订阅事件。</MudText>
+  </MudPaper>
+</MudStack>

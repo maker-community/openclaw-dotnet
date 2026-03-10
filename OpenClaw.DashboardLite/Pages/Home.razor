@@ -2,9 +2,44 @@
 
 <PageTitle>OpenClaw Dashboard Lite</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
-  <MudText Typo="Typo.h4">OpenClaw Dashboard Lite</MudText>
-  <MudText Typo="Typo.body1" Class="mt-2">
-    去 <MudLink Href="/gateway">Gateway</MudLink> 页面测试连接、调用 methods、查看 events。
-  </MudText>
-</MudContainer>
+<MudStack Spacing="3">
+  <MudPaper Class="hero-panel" Elevation="0">
+    <MudStack Spacing="1">
+      <MudText Typo="Typo.overline" Class="hero-kicker">OpenClaw MCP Gateway</MudText>
+      <MudText Typo="Typo.h4">统一控制台</MudText>
+      <MudText Typo="Typo.body1">连接 Proxy API，实时查看网关事件，执行方法调用，并在移动端保持清晰操作体验。</MudText>
+      <MudStack Row="true" Spacing="2" Class="mt-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/gateway" StartIcon="@Icons.Material.Filled.PlayArrow">
+          打开控制台
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Href="/gateway" StartIcon="@Icons.Material.Filled.SettingsInputAntenna">
+          配置连接
+        </MudButton>
+      </MudStack>
+    </MudStack>
+  </MudPaper>
+
+  <MudGrid Spacing="3">
+    <MudItem xs="12" sm="6" lg="4">
+      <MudPaper Class="metric-card" Elevation="0">
+        <MudText Typo="Typo.caption">Protocol</MudText>
+        <MudText Typo="Typo.h5">v3</MudText>
+        <MudText Typo="Typo.body2">与 OpenClaw Gateway 协议保持一致。</MudText>
+      </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" lg="4">
+      <MudPaper Class="metric-card" Elevation="0">
+        <MudText Typo="Typo.caption">Realtime</MudText>
+        <MudText Typo="Typo.h5">SignalR</MudText>
+        <MudText Typo="Typo.body2">接收 `gatewayEvent` 和 `gatewayResult` 推送。</MudText>
+      </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6" lg="4">
+      <MudPaper Class="metric-card" Elevation="0">
+        <MudText Typo="Typo.caption">Form Factor</MudText>
+        <MudText Typo="Typo.h5">Mobile First</MudText>
+        <MudText Typo="Typo.body2">卡片与表单自适应，便于手机单手操作。</MudText>
+      </MudPaper>
+    </MudItem>
+  </MudGrid>
+</MudStack>

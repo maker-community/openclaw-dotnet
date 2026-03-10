@@ -8,59 +8,82 @@
 @implements IAsyncDisposable
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
-  <MudText Typo="Typo.h4">OpenClaw Dashboard Lite</MudText>
-  <MudText Typo="Typo.body2">Proxy API: @_apiBase</MudText>
+  <MudStack Spacing="3">
+    <MudPaper Class="hero-panel" Elevation="0">
+      <MudStack Spacing="2">
+        <MudText Typo="Typo.h5">Gateway Console</MudText>
+        <MudText Typo="Typo.body2">Proxy API: @DisplayApiBase</MudText>
+        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+          <MudChip T="string" Color="@(IsConnected ? Color.Success : Color.Error)" Variant="Variant.Filled" Size="Size.Small">
+            @(IsConnected ? "已连接" : "未连接")
+          </MudChip>
+          <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="Connect" Disabled="IsConnected" StartIcon="@Icons.Material.Filled.Link">
+            连接
+          </MudButton>
+          <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="Disconnect" Disabled="!IsConnected" StartIcon="@Icons.Material.Filled.LinkOff">
+            断开
+          </MudButton>
+        </MudStack>
+      </MudStack>
+    </MudPaper>
 
-  <MudPaper Class="pa-4 mt-4">
-    <MudText Typo="Typo.h6">Settings</MudText>
-    <MudStack Spacing="2" Class="mt-2">
-      <MudTextField @bind-Value="_apiBase" Label="ProxyApiBaseUrl" Variant="Variant.Outlined" />
-      <MudTextField @bind-Value="_apiKey" Label="X-Api-Key" Variant="Variant.Outlined" />
-      <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="SaveSettings">Save</MudButton>
-    </MudStack>
-  </MudPaper>
+    <MudTabs Rounded="true" Class="console-tabs">
+      <MudTabPanel Text="连接设置" Icon="@Icons.Material.Filled.Tune">
+        <MudPaper Class="pa-4 mt-2" Elevation="0">
+          <MudStack Spacing="2">
+            <MudTextField @bind-Value="_apiBase" Label="Proxy API Base URL" Variant="Variant.Outlined" Placeholder="https://localhost:7242" />
+            <MudTextField @bind-Value="_apiKey" Label="X-Api-Key" Variant="Variant.Outlined" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSettings" StartIcon="@Icons.Material.Filled.Save">保存设置</MudButton>
+          </MudStack>
+        </MudPaper>
+      </MudTabPanel>
 
-  <MudPaper Class="pa-4 mt-4">
-    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
-      <MudText Typo="Typo.h6">SignalR</MudText>
-      <MudChip T="string" Color="@(IsConnected ? Color.Success : Color.Error)" Variant="Variant.Filled">
-        @(IsConnected ? "Connected" : "Disconnected")
-      </MudChip>
-      <MudButton Variant="Variant.Outlined" OnClick="Connect" Disabled="IsConnected">Connect</MudButton>
-      <MudButton Variant="Variant.Outlined" OnClick="Disconnect" Disabled="!IsConnected">Disconnect</MudButton>
-    </MudStack>
+      <MudTabPanel Text="接口调用" Icon="@Icons.Material.Filled.Api">
+        <MudPaper Class="pa-4 mt-2" Elevation="0">
+          <MudStack Spacing="2">
+            <MudTextField @bind-Value="Method" Label="method" Variant="Variant.Outlined" Placeholder="sessions.list" />
+            <MudTextField @bind-Value="ParamsJson" Label="params (JSON)" Variant="Variant.Outlined" Lines="8" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Call" StartIcon="@Icons.Material.Filled.PlayArrow">执行调用</MudButton>
 
-    <MudDivider Class="my-3" />
+            <MudText Typo="Typo.caption">HTTP Response</MudText>
+            <MudPaper Class="code-block" Elevation="0">
+              <MudText Typo="Typo.body2">@ResponseJson</MudText>
+            </MudPaper>
 
-    <MudStack Spacing="2">
-      <MudTextField @bind-Value="@Method" Label="method" Variant="Variant.Outlined" />
-      <MudTextField @bind-Value="@ParamsJson" Label="params (JSON)" Lines="6" Variant="Variant.Outlined" />
-      <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Call">Call</MudButton>
-      <MudText Typo="Typo.caption">Response (from REST)</MudText>
-      <MudTextField Value="@ResponseJson" Lines="10" ReadOnly="true" Variant="Variant.Outlined" />
+            <MudText Typo="Typo.caption">Gateway Result Event</MudText>
+            <MudPaper Class="code-block" Elevation="0">
+              <MudText Typo="Typo.body2">@LastResultJson</MudText>
+            </MudPaper>
+          </MudStack>
+        </MudPaper>
+      </MudTabPanel>
 
-      <MudText Typo="Typo.caption">Result (from gateway res event)</MudText>
-      <MudTextField Value="@LastResultJson" Lines="10" ReadOnly="true" Variant="Variant.Outlined" />
-    </MudStack>
-  </MudPaper>
-
-  <MudPaper Class="pa-4 mt-4">
-    <MudText Typo="Typo.h6">Events (latest 200)</MudText>
-    <MudList T="string" Dense="true">
-      @foreach (var e in Events)
-      {
-        <MudListItem T="string">
-          <MudText Typo="Typo.body2">@e</MudText>
-        </MudListItem>
-      }
-    </MudList>
-  </MudPaper>
+      <MudTabPanel Text="事件流" Icon="@Icons.Material.Filled.Timeline">
+        <MudPaper Class="pa-4 mt-2" Elevation="0">
+          <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.subtitle1">最新 200 条</MudText>
+            <MudButton Variant="Variant.Text" Color="Color.Secondary" OnClick="ClearEvents" StartIcon="@Icons.Material.Filled.DeleteSweep">清空</MudButton>
+          </MudStack>
+          <MudList T="string" Dense="true" Class="events-list">
+            @foreach (var e in Events)
+            {
+              <MudListItem T="string">
+                <MudText Typo="Typo.body2">@e</MudText>
+              </MudListItem>
+            }
+          </MudList>
+        </MudPaper>
+      </MudTabPanel>
+    </MudTabs>
+  </MudStack>
 </MudContainer>
 
 @code {
   private HubConnection? _hub;
   private string _apiBase = "";
   private string? _apiKey;
+
+  private string DisplayApiBase => string.IsNullOrWhiteSpace(_apiBase) ? "(同源)" : _apiBase;
 
   public bool IsConnected => _hub?.State == HubConnectionState.Connected;
 
@@ -83,12 +106,22 @@
     await Settings.SaveAsync(new OpenClaw.DashboardLite.Services.SettingsService.Settings(_apiBase, _apiKey));
   }
 
+  private void ClearEvents() => Events.Clear();
+
+  private Uri BuildBaseUri()
+  {
+    if (string.IsNullOrWhiteSpace(_apiBase))
+      return new Uri(Nav.BaseUri);
+
+    return new Uri(_apiBase.TrimEnd('/') + "/");
+  }
+
   private async Task Connect()
   {
     if (_hub is not null) return;
 
     _hub = new HubConnectionBuilder()
-      .WithUrl(new Uri(new Uri(_apiBase.TrimEnd('/') + "/"), "hub/openclaw"), opts =>
+      .WithUrl(new Uri(BuildBaseUri(), "hub/openclaw"), opts =>
       {
         if (!string.IsNullOrWhiteSpace(_apiKey))
         {
@@ -157,7 +190,7 @@
       @params = p
     };
 
-    var url = new Uri(new Uri(_apiBase.TrimEnd('/') + "/"), "api/openclaw/call");
+    var url = new Uri(BuildBaseUri(), "api/openclaw/call");
     using var req = new HttpRequestMessage(HttpMethod.Post, url)
     {
       Content = JsonContent.Create(body)

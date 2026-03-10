@@ -20,13 +20,18 @@ public sealed class SettingsService
       if (!string.IsNullOrWhiteSpace(json))
       {
         var s = System.Text.Json.JsonSerializer.Deserialize<Settings>(json);
-        if (s is not null && !string.IsNullOrWhiteSpace(s.ProxyApiBaseUrl))
+        if (s is not null)
+        {
+          if (string.Equals(s.ProxyApiBaseUrl, "http://127.0.0.1:5010", StringComparison.OrdinalIgnoreCase))
+            return new Settings(string.Empty, s.ApiKey);
+
           return s;
+        }
       }
     }
     catch { }
 
-    return new Settings("http://127.0.0.1:5010", null);
+    return new Settings(string.Empty, null);
   }
 
   public async Task SaveAsync(Settings settings)
