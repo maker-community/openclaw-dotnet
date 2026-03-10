@@ -41,6 +41,10 @@ if (!string.IsNullOrWhiteSpace(app.Configuration["OpenClaw:DashboardOrigin"]))
   app.UseCors(Cors.PolicyName);
 }
 
+// Serve Blazor WASM static assets before auth so the UI loads without an API key
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
 app.UseMiddleware<ApiKeyAuthMiddleware>();
 
 app.UseSwagger();
@@ -50,6 +54,7 @@ app.UseHttpsRedirection();
 
 app.MapControllers();
 app.MapHub<OpenClawHub>("/hub/openclaw");
+app.MapFallbackToFile("index.html");
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {
