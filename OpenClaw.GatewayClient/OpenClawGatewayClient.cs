@@ -61,7 +61,16 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
       await Task.Delay(50, ct);
     }
 
-    await SendConnectAsync(ct);
+    try
+    {
+      await SendConnectAsync(ct);
+    }
+    catch
+    {
+      // Reset so a fresh client can retry authentication
+      _connectSent = false;
+      throw;
+    }
   }
 
   private async Task SendConnectAsync(CancellationToken ct)
