@@ -4,8 +4,10 @@ namespace OpenClaw.GatewayClient;
 
 internal static class LibSodium
 {
-  // Ubuntu provides libsodium.so.23 (soname). Use the explicit soname to avoid resolution issues.
-  private const string Lib = "libsodium.so.23";
+  // "libsodium" without extension: the CLR resolves to libsodium.dll (Windows),
+  // libsodium.dylib (macOS) or libsodium.so (Linux) using the NuGet runtimes/<rid>/native/
+  // folder shipped by the `libsodium` NuGet package.
+  private const string Lib = "libsodium";
 
   [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
   internal static extern int sodium_init();

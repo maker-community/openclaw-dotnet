@@ -17,7 +17,11 @@ public sealed record ConnectParams(
   [property: JsonPropertyName("auth")] AuthInfo? Auth = null,
   [property: JsonPropertyName("role")] string? Role = null,
   [property: JsonPropertyName("scopes")] string[]? Scopes = null,
-  [property: JsonPropertyName("device")] DeviceProof? Device = null
+  [property: JsonPropertyName("device")] DeviceProof? Device = null,
+  [property: JsonPropertyName("commands")] string[]? Commands = null,
+  [property: JsonPropertyName("permissions")] Dictionary<string, bool>? Permissions = null,
+  [property: JsonPropertyName("locale")] string? Locale = null,
+  [property: JsonPropertyName("userAgent")] string? UserAgent = null
 );
 
 public sealed record ClientInfo(

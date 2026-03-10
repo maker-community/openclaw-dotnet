@@ -69,10 +69,9 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
     if (_connectSent) return;
     _connectSent = true;
 
-    var role = "operator";
-    // 最小权限原则：不硬编码 admin。
-    // 你的 token 如果本身不是 admin，也会走 scopes 校验。
-    // 先声明 read/write，覆盖 sessions.list/chat.send 等常用方法。
+    const string role = "operator";
+    const string clientId = "gateway-client";
+    const string mode = "backend";
     var scopes = new[] { "operator.read", "operator.write" };
 
     // Prefer stored device token if present (this is what makes CLI/TUI "just work")
@@ -85,40 +84,36 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
       throw new InvalidOperationException("token is required (either gateway token or stored deviceToken)");
 
     var signedAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-    var nonce = _connectNonce;
-
-    // Mirror OpenClaw buildDeviceAuthPayload (v2 when nonce exists)
-    var version = string.IsNullOrWhiteSpace(nonce) ? "v1" : "v2";
+    var nonce = _connectNonce!;
+    var platform = GetNormalizedPlatform();
     var scopesCsv = string.Join(",", scopes);
-    var payload = string.Join("|", new[]
-    {
-      version,
-      _deviceIdentity.DeviceId,
-      "gateway-client",
-      "backend",
-      role,
-      scopesCsv,
-      signedAtMs.ToString(),
-      authToken,
-      version == "v2" ? (nonce ?? "") : null
-    }.Where(x => x is not null)!.Select(x => x!));
 
-    var signature = _deviceIdentity.SignBase64Url(payload);
+    // v2 signature: v2|deviceId|clientId|mode|role|scopes|signedAt|token|nonce
+    // (v2 remains accepted; v3 format is not yet publicly specified in full)
+    var sigPayload = string.Join("|",
+      "v2", _deviceIdentity.DeviceId, clientId, mode, role, scopesCsv,
+      signedAtMs.ToString(), authToken, nonce);
+    var signature = _deviceIdentity.SignBase64Url(sigPayload);
 
+    var clientVersion = typeof(OpenClawGatewayClient).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
     var connect = new ConnectParams(
       MinProtocol: OpenClawDefaults.ProtocolVersion,
       MaxProtocol: OpenClawDefaults.ProtocolVersion,
       Client: new ClientInfo(
-        Id: "gateway-client",
-        Version: "0.1.0",
-        Platform: System.Runtime.InteropServices.RuntimeInformation.OSDescription,
-        Mode: "backend",
+        Id: clientId,
+        Version: clientVersion,
+        Platform: platform,
+        Mode: mode,
         InstanceId: Guid.NewGuid().ToString()
       ),
       Caps: Array.Empty<string>(),
       Auth: new AuthInfo(Token: authToken),
       Role: role,
       Scopes: scopes,
+      Commands: Array.Empty<string>(),
+      Permissions: new Dictionary<string, bool>(),
+      Locale: System.Globalization.CultureInfo.CurrentCulture.Name,
+      UserAgent: $"openclaw-dotnet/{clientVersion}",
       Device: new DeviceProof(
         Id: _deviceIdentity.DeviceId,
         PublicKey: _deviceIdentity.PublicKeyRawBase64Url,
@@ -147,6 +142,17 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
     }
   }
 
+  private static string GetNormalizedPlatform()
+  {
+    if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+      return "windows";
+    if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX))
+      return "macos";
+    if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux))
+      return "linux";
+    return "other";
+  }
+
   public async Task<T> CallAsync<T>(string method, object? @params = null, CancellationToken ct = default)
   {
     var payload = await CallRawAsync(method, @params, ct);
@@ -166,12 +172,6 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
 
     var tcs = new TaskCompletionSource<ResponseFrame>(TaskCreationOptions.RunContinuationsAsynchronously);
     _pending[id] = tcs;
-
-    // DEBUG: log outgoing request for connect only
-    if (req.Method == "connect")
-    {
-      try { Console.Error.WriteLine("CONNECT_REQ " + JsonSerializer.Serialize(req, _json)); } catch { }
-    }
 
     await SendJsonAsync(req, ct);
 
@@ -261,6 +261,161 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
       // ignore parse errors
     }
   }
+
+  // ─── Health & Status ───────────────────────────────────────────────────────
+
+  /// <summary>Returns gateway health status.</summary>
+  public Task<HealthResult> HealthAsync(CancellationToken ct = default)
+    => CallAsync<HealthResult>("health", null, ct);
+
+  /// <summary>Returns raw gateway status payload.</summary>
+  public Task<JsonElement?> StatusAsync(CancellationToken ct = default)
+    => CallRawAsync("status", null, ct);
+
+  // ─── System Presence ───────────────────────────────────────────────────────
+
+  /// <summary>Returns all currently connected clients (deviceId, role, scopes, platform).</summary>
+  public Task<SystemPresenceResult> SystemPresenceAsync(CancellationToken ct = default)
+    => CallAsync<SystemPresenceResult>("system-presence", null, ct);
+
+  // ─── Sessions ──────────────────────────────────────────────────────────────
+
+  /// <summary>Lists all active sessions.</summary>
+  public Task<SessionsListResult> SessionsListAsync(int? limit = null, CancellationToken ct = default)
+    => CallAsync<SessionsListResult>("sessions.list",
+        limit.HasValue ? (object)new { limit = limit.Value } : new { }, ct);
+
+  /// <summary>Gets a single session by <paramref name="sessionKey"/>.</summary>
+  public Task<SessionInfo> SessionsGetAsync(string sessionKey, CancellationToken ct = default)
+    => CallAsync<SessionInfo>("sessions.get", new { sessionKey }, ct);
+
+  /// <summary>
+  /// Patches a session's settings. Only non-null fields in <paramref name="patch"/> are sent.
+  /// </summary>
+  public Task<SessionInfo> SessionsPatchAsync(string sessionKey, SessionPatch patch, CancellationToken ct = default)
+  {
+    var d = new Dictionary<string, object?> { ["sessionKey"] = sessionKey };
+    if (patch.Model is not null) d["model"] = patch.Model;
+    if (patch.ThinkingLevel is not null) d["thinkingLevel"] = patch.ThinkingLevel;
+    if (patch.VerboseLevel is not null) d["verboseLevel"] = patch.VerboseLevel;
+    if (patch.SendPolicy is not null) d["sendPolicy"] = patch.SendPolicy;
+    if (patch.GroupActivation is not null) d["groupActivation"] = patch.GroupActivation;
+    if (patch.Elevated.HasValue) d["elevated"] = patch.Elevated.Value;
+    return CallAsync<SessionInfo>("sessions.patch", d, ct);
+  }
+
+  /// <summary>Returns message history for a session.</summary>
+  public Task<SessionHistoryResult> SessionsHistoryAsync(
+    string sessionKey, int? limit = null, string? before = null, CancellationToken ct = default)
+  {
+    var d = new Dictionary<string, object?> { ["sessionKey"] = sessionKey };
+    if (limit.HasValue) d["limit"] = limit.Value;
+    if (before is not null) d["before"] = before;
+    return CallAsync<SessionHistoryResult>("sessions.history", d, ct);
+  }
+
+  /// <summary>Spawns a new session (sub-agent / group isolation).</summary>
+  public Task<SessionInfo> SessionsSpawnAsync(
+    string sessionKey, string? description = null, CancellationToken ct = default)
+  {
+    var d = new Dictionary<string, object?> { ["sessionKey"] = sessionKey };
+    if (description is not null) d["description"] = description;
+    return CallAsync<SessionInfo>("sessions.spawn", d, ct);
+  }
+
+  // ─── Chat ──────────────────────────────────────────────────────────────────
+
+  /// <summary>
+  /// Sends a chat message to a session.
+  /// An idempotency key is auto-generated when not supplied.
+  /// </summary>
+  public Task<ChatSendResult> ChatSendAsync(
+    string sessionKey, string message,
+    string? idempotencyKey = null, CancellationToken ct = default)
+    => CallAsync<ChatSendResult>("chat.send", new
+    {
+      sessionKey,
+      message,
+      idempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString()
+    }, ct);
+
+  // ─── Agent ─────────────────────────────────────────────────────────────────
+
+  /// <summary>
+  /// Runs the agent with a message.  An idempotency key is auto-generated when not supplied.
+  /// </summary>
+  public Task<AgentResult> AgentAsync(
+    string sessionKey, string message,
+    string? idempotencyKey = null, string? thinkingLevel = null,
+    CancellationToken ct = default)
+  {
+    var d = new Dictionary<string, object?>
+    {
+      ["sessionKey"] = sessionKey,
+      ["message"] = message,
+      ["idempotencyKey"] = idempotencyKey ?? Guid.NewGuid().ToString()
+    };
+    if (thinkingLevel is not null) d["thinkingLevel"] = thinkingLevel;
+    return CallAsync<AgentResult>("agent", d, ct);
+  }
+
+  // ─── Tools ─────────────────────────────────────────────────────────────────
+
+  /// <summary>Returns the runtime tool catalog for the given session (or the default agent).</summary>
+  public Task<ToolsCatalogResult> ToolsCatalogAsync(string? sessionKey = null, CancellationToken ct = default)
+    => CallAsync<ToolsCatalogResult>("tools.catalog",
+        sessionKey is not null ? (object)new { sessionKey } : new { }, ct);
+
+  /// <summary>Invokes a gateway tool by name.</summary>
+  public Task<JsonElement?> ToolsInvokeAsync(
+    string tool, object? input = null, string? sessionKey = null, CancellationToken ct = default)
+  {
+    var d = new Dictionary<string, object?> { ["tool"] = tool };
+    if (input is not null) d["input"] = input;
+    if (sessionKey is not null) d["sessionKey"] = sessionKey;
+    return CallRawAsync("tools.invoke", d, ct);
+  }
+
+  // ─── Nodes ─────────────────────────────────────────────────────────────────
+
+  /// <summary>Lists all connected nodes (macOS, iOS, Android, headless).</summary>
+  public Task<NodeListResult> NodeListAsync(CancellationToken ct = default)
+    => CallAsync<NodeListResult>("node.list", null, ct);
+
+  /// <summary>Returns capabilities and permissions for a specific node.</summary>
+  public Task<NodeInfo> NodeDescribeAsync(string nodeId, CancellationToken ct = default)
+    => CallAsync<NodeInfo>("node.describe", new { nodeId }, ct);
+
+  /// <summary>
+  /// Invokes a command on a node (e.g. <c>camera.snap</c>, <c>system.run</c>, <c>location.get</c>).
+  /// </summary>
+  public Task<JsonElement?> NodeInvokeAsync(
+    string nodeId, string command, object? args = null, CancellationToken ct = default)
+  {
+    var d = new Dictionary<string, object?> { ["nodeId"] = nodeId, ["command"] = command };
+    if (args is not null) d["args"] = args;
+    return CallRawAsync("node.invoke", d, ct);
+  }
+
+  // ─── Exec approvals ────────────────────────────────────────────────────────
+
+  /// <summary>
+  /// Resolves a pending exec approval request.
+  /// Requires <c>operator.approvals</c> scope.
+  /// </summary>
+  public Task<JsonElement?> ExecApprovalResolveAsync(
+    string approvalId, bool approved, CancellationToken ct = default)
+    => CallRawAsync("exec.approval.resolve", new { approvalId, approved }, ct);
+
+  // ─── Device tokens ─────────────────────────────────────────────────────────
+
+  /// <summary>Rotates the device token for a given device. Requires <c>operator.pairing</c> scope.</summary>
+  public Task<JsonElement?> DeviceTokenRotateAsync(string deviceId, CancellationToken ct = default)
+    => CallRawAsync("device.token.rotate", new { deviceId }, ct);
+
+  /// <summary>Revokes the device token for a given device. Requires <c>operator.pairing</c> scope.</summary>
+  public Task<JsonElement?> DeviceTokenRevokeAsync(string deviceId, CancellationToken ct = default)
+    => CallRawAsync("device.token.revoke", new { deviceId }, ct);
 
   public async ValueTask DisposeAsync()
   {
