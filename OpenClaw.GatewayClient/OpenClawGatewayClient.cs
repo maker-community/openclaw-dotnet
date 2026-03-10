@@ -24,6 +24,14 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
   private string? _connectNonce;
   private bool _connectSent;
 
+  private static string MaskToken(string? token)
+  {
+    if (string.IsNullOrWhiteSpace(token)) return "<empty>";
+    var t = token.Trim();
+    if (t.Length <= 8) return "****";
+    return $"{t[..4]}...{t[^4..]}";
+  }
+
   public event Action<EventFrame>? OnEvent;
 
   public OpenClawGatewayClient(string? gatewayUrl = null, string? token = null)
@@ -89,6 +97,7 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
       : null;
 
     var authToken = deviceToken ?? _token;
+    var authSource = string.IsNullOrWhiteSpace(deviceToken) ? "gatewayToken" : "deviceToken";
     if (string.IsNullOrWhiteSpace(authToken))
       throw new InvalidOperationException("token is required (either gateway token or stored deviceToken)");
 
@@ -132,7 +141,21 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
       )
     );
 
-    var hello = await CallAsync<HelloOk>("connect", connect, ct);
+    HelloOk hello;
+    try
+    {
+      hello = await CallAsync<HelloOk>("connect", connect, ct);
+    }
+    catch (InvalidOperationException ex)
+    {
+      var deviceId = _deviceIdentity.DeviceId;
+      var deviceIdShort = deviceId.Length > 8 ? $"{deviceId[..8]}..." : deviceId;
+      throw new InvalidOperationException(
+        $"{ex.Message} (authSource={authSource}, token={MaskToken(authToken)}, deviceId={deviceIdShort})",
+        ex
+      );
+    }
+
     if (!string.Equals(hello.Type, "hello-ok", StringComparison.OrdinalIgnoreCase))
       throw new InvalidOperationException($"connect did not return hello-ok (got {hello.Type})");
 
