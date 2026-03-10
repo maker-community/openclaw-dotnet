@@ -17,6 +17,7 @@ var app = builder.Build();
 // Simple shared-key auth (same as ProxyApi)
 app.UseMiddleware<ApiKeyAuthMiddleware>();
 
-app.MapMcp();
+// Primary MCP endpoint using Streamable HTTP transport.
+app.MapMcp("/mcp");
 
 app.Run();
