@@ -31,8 +31,11 @@ public sealed record SystemPresenceResult(
 // ─── sessions ────────────────────────────────────────────────────────────────
 
 public sealed record SessionInfo(
-  [property: JsonPropertyName("sessionKey")] string SessionKey,
+  [property: JsonPropertyName("sessionKey")] string? SessionKey,
+  [property: JsonPropertyName("key")] string? Key,
+  [property: JsonPropertyName("sessionId")] string? SessionId,
   [property: JsonPropertyName("label")] string? Label,
+  [property: JsonPropertyName("title")] string? Title,
   [property: JsonPropertyName("model")] string? Model,
   [property: JsonPropertyName("status")] string? Status,
   [property: JsonPropertyName("role")] string? Role,
@@ -49,7 +52,7 @@ public sealed record SessionsListResult(
 
 public sealed record MessageEntry(
   [property: JsonPropertyName("role")] string Role,
-  [property: JsonPropertyName("content")] string? Content,
+  [property: JsonPropertyName("content")] JsonElement? Content,
   [property: JsonPropertyName("ts")] long? Ts,
   [property: JsonPropertyName("id")] string? Id,
   [property: JsonPropertyName("metadata")] JsonElement? Metadata

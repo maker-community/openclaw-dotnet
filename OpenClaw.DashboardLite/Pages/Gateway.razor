@@ -11,7 +11,7 @@
   <MudStack Spacing="3">
     <MudPaper Class="hero-panel" Elevation="0">
       <MudStack Spacing="2">
-        <MudText Typo="Typo.h5">Gateway Console</MudText>
+        <MudText Typo="Typo.h5">OpenClaw Chat Console</MudText>
         <MudText Typo="Typo.body2">Proxy API: @DisplayApiBase</MudText>
         <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
           <MudChip T="string" Color="@(IsConnected ? Color.Success : Color.Error)" Variant="Variant.Filled" Size="Size.Small">
@@ -28,32 +28,80 @@
     </MudPaper>
 
     <MudTabs Rounded="true" Class="console-tabs">
+      <MudTabPanel Text="聊天" Icon="@Icons.Material.Filled.Chat">
+        <MudGrid Spacing="2" Class="mt-2">
+          <MudItem xs="12" md="4" lg="3">
+            <MudPaper Class="pa-3 chat-panel" Elevation="0">
+              <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.subtitle1">会话</MudText>
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="LoadSessions" StartIcon="@Icons.Material.Filled.Refresh">刷新</MudButton>
+              </MudStack>
+
+              <MudTextField @bind-Value="_newSessionKey" Label="会话Key" Variant="Variant.Outlined" Placeholder="main" Margin="Margin.Dense" />
+              <MudButton Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true" Class="mt-1" OnClick="UseOrCreateSession">
+                使用此会话
+              </MudButton>
+
+              <MudDivider Class="my-2" />
+
+              <MudList T="SessionListItem" Dense="true" Class="session-list">
+                @foreach (var s in _sessions)
+                {
+                  <MudListItem T="SessionListItem" Class="@SessionItemClass(s.SessionKey)" OnClick="() => SelectSession(s.SessionKey)">
+                    <MudStack Spacing="0">
+                      <MudText Typo="Typo.body2">@(string.IsNullOrWhiteSpace(s.Label) ? s.SessionKey : s.Label)</MudText>
+                      <MudText Typo="Typo.caption">@s.SessionKey</MudText>
+                    </MudStack>
+                  </MudListItem>
+                }
+              </MudList>
+            </MudPaper>
+          </MudItem>
+
+          <MudItem xs="12" md="8" lg="9">
+            <MudPaper Class="pa-3 chat-panel" Elevation="0">
+              <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                <MudStack Spacing="0">
+                  <MudText Typo="Typo.subtitle1">@ActiveSessionTitle</MudText>
+                  <MudText Typo="Typo.caption">sessionKey: @_activeSessionKey</MudText>
+                </MudStack>
+                <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="RefreshHistory" StartIcon="@Icons.Material.Filled.History">加载历史</MudButton>
+              </MudStack>
+
+              <div class="chat-stream">
+                @if (_messages.Count == 0)
+                {
+                  <MudText Typo="Typo.body2" Class="empty-chat">暂无消息，发送第一条开始对话。</MudText>
+                }
+                else
+                {
+                  @foreach (var m in _messages)
+                  {
+                    <div class="chat-bubble @(m.IsUser ? "user" : "assistant")">
+                      <div class="chat-meta">@m.Role · @m.TimeLabel</div>
+                      <div class="chat-content">@m.Content</div>
+                    </div>
+                  }
+                }
+              </div>
+
+              <MudStack Row="true" Spacing="1" Class="mt-2" AlignItems="AlignItems.End">
+                <MudTextField @bind-Value="_inputMessage" Label="输入消息" Variant="Variant.Outlined" Lines="3" FullWidth="true" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendMessage" Disabled="_sending || string.IsNullOrWhiteSpace(_activeSessionKey)">
+                  @(_sending ? "发送中" : "发送")
+                </MudButton>
+              </MudStack>
+            </MudPaper>
+          </MudItem>
+        </MudGrid>
+      </MudTabPanel>
+
       <MudTabPanel Text="连接设置" Icon="@Icons.Material.Filled.Tune">
         <MudPaper Class="pa-4 mt-2" Elevation="0">
           <MudStack Spacing="2">
             <MudTextField @bind-Value="_apiBase" Label="Proxy API Base URL" Variant="Variant.Outlined" Placeholder="https://localhost:7242" />
             <MudTextField @bind-Value="_apiKey" Label="X-Api-Key" Variant="Variant.Outlined" />
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveSettings" StartIcon="@Icons.Material.Filled.Save">保存设置</MudButton>
-          </MudStack>
-        </MudPaper>
-      </MudTabPanel>
-
-      <MudTabPanel Text="接口调用" Icon="@Icons.Material.Filled.Api">
-        <MudPaper Class="pa-4 mt-2" Elevation="0">
-          <MudStack Spacing="2">
-            <MudTextField @bind-Value="Method" Label="method" Variant="Variant.Outlined" Placeholder="sessions.list" />
-            <MudTextField @bind-Value="ParamsJson" Label="params (JSON)" Variant="Variant.Outlined" Lines="8" />
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Call" StartIcon="@Icons.Material.Filled.PlayArrow">执行调用</MudButton>
-
-            <MudText Typo="Typo.caption">HTTP Response</MudText>
-            <MudPaper Class="code-block" Elevation="0">
-              <MudText Typo="Typo.body2">@ResponseJson</MudText>
-            </MudPaper>
-
-            <MudText Typo="Typo.caption">Gateway Result Event</MudText>
-            <MudPaper Class="code-block" Elevation="0">
-              <MudText Typo="Typo.body2">@LastResultJson</MudText>
-            </MudPaper>
           </MudStack>
         </MudPaper>
       </MudTabPanel>
@@ -79,26 +127,55 @@
 </MudContainer>
 
 @code {
+  private sealed record SessionListEnvelope(bool Ok, SessionListPayload? Payload);
+  private sealed record SessionListPayload(SessionListItem[]? Sessions);
+  private sealed record SessionListItem(string SessionKey, string? Label, string? Status, string? Model);
+
+  private sealed record SessionHistoryEnvelope(bool Ok, SessionHistoryPayload? Payload);
+  private sealed record SessionHistoryPayload(ChatMessagePayload[]? Messages, bool? HasMore);
+  private sealed record ChatMessagePayload(string Role, JsonElement? Content, long? Ts, string? Id);
+
+  private sealed record ChatSendBody(string SessionKey, string Message, string? IdempotencyKey);
+
+  private sealed class ChatMessageUi
+  {
+    public string Role { get; init; } = "assistant";
+    public string Content { get; init; } = string.Empty;
+    public long? Ts { get; init; }
+    public bool IsUser => string.Equals(Role, "user", StringComparison.OrdinalIgnoreCase);
+    public string TimeLabel => Ts.HasValue
+      ? DateTimeOffset.FromUnixTimeMilliseconds(Ts.Value).ToLocalTime().ToString("HH:mm")
+      : DateTimeOffset.Now.ToString("HH:mm");
+  }
+
   private HubConnection? _hub;
   private string _apiBase = "";
   private string? _apiKey;
+  private string _newSessionKey = "main";
+  private string _activeSessionKey = "main";
+  private string _activeSessionLabel = "main";
+  private string _inputMessage = string.Empty;
+  private bool _sending;
+  private bool _loadingHistory;
+  private DateTimeOffset _lastHistoryRefresh = DateTimeOffset.MinValue;
 
   private string DisplayApiBase => string.IsNullOrWhiteSpace(_apiBase) ? "(同源)" : _apiBase;
+  private string ActiveSessionTitle => string.IsNullOrWhiteSpace(_activeSessionLabel) ? "聊天" : _activeSessionLabel;
 
   public bool IsConnected => _hub?.State == HubConnectionState.Connected;
 
-  public string Method { get; set; } = "sessions.list";
-  public string ParamsJson { get; set; } = "{}";
-  public string ResponseJson { get; set; } = "";
-  public string LastResultJson { get; set; } = "";
-
   public List<string> Events { get; set; } = new();
+  private List<SessionListItem> _sessions = new();
+  private List<ChatMessageUi> _messages = new();
 
   protected override async Task OnInitializedAsync()
   {
     var s = await Settings.GetAsync();
     _apiBase = s.ProxyApiBaseUrl;
     _apiKey = s.ApiKey;
+    await Connect();
+    await LoadSessions();
+    await RefreshHistory();
   }
 
   private async Task SaveSettings()
@@ -139,20 +216,20 @@
 
       Events.Insert(0, line);
       if (Events.Count > 200) Events.RemoveAt(Events.Count - 1);
-      InvokeAsync(StateHasChanged);
-    });
 
-    // ProxyApi will also push the actual gateway response frame (type=res) via SignalR.
-    _hub.On<JsonElement>("gatewayResult", (res) =>
-    {
-      try
+      // For active session, refresh chat view when related events arrive.
+      if (evt.TryGetProperty("payload", out var payload)
+          && payload.ValueKind == JsonValueKind.Object
+          && payload.TryGetProperty("sessionKey", out var sk)
+          && string.Equals(sk.GetString(), _activeSessionKey, StringComparison.Ordinal))
       {
-        LastResultJson = JsonSerializer.Serialize(res, new JsonSerializerOptions { WriteIndented = true });
+        var now = DateTimeOffset.UtcNow;
+        if (now - _lastHistoryRefresh > TimeSpan.FromMilliseconds(600))
+        {
+          _ = InvokeAsync(RefreshHistory);
+        }
       }
-      catch
-      {
-        LastResultJson = res.ToString();
-      }
+
       InvokeAsync(StateHasChanged);
     });
 
@@ -167,40 +244,191 @@
     _hub = null;
   }
 
-  private async Task Call()
+  private async Task UseOrCreateSession()
   {
-    ResponseJson = "";
-    LastResultJson = "";
+    var key = string.IsNullOrWhiteSpace(_newSessionKey) ? "main" : _newSessionKey.Trim();
+    _activeSessionKey = key;
+    _activeSessionLabel = key;
+    if (_sessions.All(x => !string.Equals(x.SessionKey, key, StringComparison.Ordinal)))
+      _sessions.Insert(0, new SessionListItem(key, key, null, null));
+    await RefreshHistory();
+  }
 
-    JsonElement? p = null;
+  private async Task SelectSession(string sessionKey)
+  {
+    _activeSessionKey = sessionKey;
+    _activeSessionLabel = _sessions.FirstOrDefault(x => x.SessionKey == sessionKey)?.Label ?? sessionKey;
+    await RefreshHistory();
+  }
+
+  private async Task LoadSessions()
+  {
     try
     {
-      using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(ParamsJson) ? "{}" : ParamsJson);
-      p = doc.RootElement.Clone();
+      var url = new Uri(BuildBaseUri(), "api/openclaw/sessions?limit=50");
+      using var req = new HttpRequestMessage(HttpMethod.Get, url);
+      if (!string.IsNullOrWhiteSpace(_apiKey))
+        req.Headers.TryAddWithoutValidation("X-Api-Key", _apiKey);
+
+      var resp = await Http.SendAsync(req);
+      if (!resp.IsSuccessStatusCode)
+        return;
+
+      var data = await resp.Content.ReadFromJsonAsync<SessionListEnvelope>();
+      _sessions = data?.Payload?.Sessions?.ToList() ?? new List<SessionListItem>();
+      if (_sessions.Count > 0 && string.IsNullOrWhiteSpace(_activeSessionKey))
+      {
+        _activeSessionKey = _sessions[0].SessionKey;
+        _activeSessionLabel = _sessions[0].Label ?? _sessions[0].SessionKey;
+      }
+
+      if (_sessions.Count > 0 && _sessions.All(x => !string.Equals(x.SessionKey, _activeSessionKey, StringComparison.Ordinal)))
+      {
+        _activeSessionKey = _sessions[0].SessionKey;
+        _activeSessionLabel = _sessions[0].Label ?? _sessions[0].SessionKey;
+      }
+    }
+    catch
+    {
+      // keep UI responsive; user can still type in session key manually
+    }
+  }
+
+  private async Task RefreshHistory()
+  {
+    if (_loadingHistory || string.IsNullOrWhiteSpace(_activeSessionKey))
+      return;
+
+    _loadingHistory = true;
+    _lastHistoryRefresh = DateTimeOffset.UtcNow;
+
+    try
+    {
+      var url = new Uri(BuildBaseUri(), $"api/openclaw/sessions/{Uri.EscapeDataString(_activeSessionKey)}/history?limit=80");
+      using var req = new HttpRequestMessage(HttpMethod.Get, url);
+      if (!string.IsNullOrWhiteSpace(_apiKey))
+        req.Headers.TryAddWithoutValidation("X-Api-Key", _apiKey);
+
+      var resp = await Http.SendAsync(req);
+      if (!resp.IsSuccessStatusCode)
+        return;
+
+      var data = await resp.Content.ReadFromJsonAsync<SessionHistoryEnvelope>();
+      var items = data?.Payload?.Messages ?? Array.Empty<ChatMessagePayload>();
+      _messages = items
+        .Select(x => new ChatMessageUi
+        {
+          Role = string.IsNullOrWhiteSpace(x.Role) ? "assistant" : x.Role,
+          Content = NormalizeContent(x.Content),
+          Ts = x.Ts
+        })
+        .ToList();
+    }
+    catch
+    {
+      // no-op; event stream can recover view later
+    }
+    finally
+    {
+      _loadingHistory = false;
+      await InvokeAsync(StateHasChanged);
+    }
+  }
+
+  private async Task SendMessage()
+  {
+    if (_sending || string.IsNullOrWhiteSpace(_activeSessionKey) || string.IsNullOrWhiteSpace(_inputMessage))
+      return;
+
+    var text = _inputMessage.Trim();
+    _inputMessage = string.Empty;
+
+    _messages.Add(new ChatMessageUi
+    {
+      Role = "user",
+      Content = text,
+      Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+    });
+    await InvokeAsync(StateHasChanged);
+
+    _sending = true;
+    try
+    {
+      var url = new Uri(BuildBaseUri(), "api/openclaw/chat/send");
+      using var req = new HttpRequestMessage(HttpMethod.Post, url)
+      {
+        Content = JsonContent.Create(new ChatSendBody(_activeSessionKey, text, Guid.NewGuid().ToString()))
+      };
+      if (!string.IsNullOrWhiteSpace(_apiKey))
+        req.Headers.TryAddWithoutValidation("X-Api-Key", _apiKey);
+
+      var resp = await Http.SendAsync(req);
+      if (!resp.IsSuccessStatusCode)
+      {
+        _messages.Add(new ChatMessageUi
+        {
+          Role = "system",
+          Content = $"发送失败: {(int)resp.StatusCode} {resp.ReasonPhrase}",
+          Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        });
+        return;
+      }
+
+      await RefreshHistory();
     }
     catch (Exception ex)
     {
-      ResponseJson = "Invalid JSON: " + ex.Message;
-      return;
+      _messages.Add(new ChatMessageUi
+      {
+        Role = "system",
+        Content = "发送异常: " + ex.Message,
+        Ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+      });
+    }
+    finally
+    {
+      _sending = false;
+      await InvokeAsync(StateHasChanged);
+    }
+  }
+
+  private static string NormalizeContent(JsonElement? content)
+  {
+    if (!content.HasValue || content.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+      return "[empty]";
+
+    var v = content.Value;
+    return v.ValueKind switch
+    {
+      JsonValueKind.String => string.IsNullOrWhiteSpace(v.GetString()) ? "[empty]" : v.GetString()!.Trim(),
+      JsonValueKind.Array => string.Join("\n", v.EnumerateArray().Select(RenderArrayItem).Where(x => !string.IsNullOrWhiteSpace(x))),
+      JsonValueKind.Object => v.ToString(),
+      _ => v.ToString()
+    };
+  }
+
+  private static string RenderArrayItem(JsonElement item)
+  {
+    if (item.ValueKind == JsonValueKind.String)
+      return item.GetString() ?? string.Empty;
+
+    if (item.ValueKind == JsonValueKind.Object)
+    {
+      if (item.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String)
+        return text.GetString() ?? string.Empty;
+
+      if (item.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String
+          && item.TryGetProperty("content", out var nested))
+        return $"[{type.GetString()}] {nested}";
+
+      return item.ToString();
     }
 
-    var body = new
-    {
-      method = Method,
-      @params = p
-    };
-
-    var url = new Uri(BuildBaseUri(), "api/openclaw/call");
-    using var req = new HttpRequestMessage(HttpMethod.Post, url)
-    {
-      Content = JsonContent.Create(body)
-    };
-    if (!string.IsNullOrWhiteSpace(_apiKey))
-      req.Headers.TryAddWithoutValidation("X-Api-Key", _apiKey);
-
-    var resp = await Http.SendAsync(req);
-    ResponseJson = await resp.Content.ReadAsStringAsync();
+    return item.ToString();
   }
+
+  private string SessionItemClass(string sessionKey)
+    => string.Equals(sessionKey, _activeSessionKey, StringComparison.Ordinal) ? "session-item active" : "session-item";
 
   public async ValueTask DisposeAsync()
   {

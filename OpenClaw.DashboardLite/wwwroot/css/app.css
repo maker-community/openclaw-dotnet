@@ -125,6 +125,70 @@ body {
     background: rgba(255, 255, 255, 0.7);
 }
 
+.chat-panel {
+    border: 1px solid var(--oc-panel-border);
+    background: rgba(255, 255, 255, 0.82);
+}
+
+.session-list {
+    max-height: 56vh;
+    overflow: auto;
+}
+
+.session-item {
+    border-radius: 10px;
+    margin-bottom: 4px;
+    cursor: pointer;
+}
+
+.session-item.active {
+    background: rgba(11, 110, 79, 0.14);
+}
+
+.chat-stream {
+    min-height: 42vh;
+    max-height: 58vh;
+    overflow: auto;
+    padding: 0.5rem;
+    border: 1px solid var(--oc-panel-border);
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(240, 247, 243, 0.75));
+}
+
+.empty-chat {
+    color: var(--oc-subtle);
+    padding: 1rem;
+}
+
+.chat-bubble {
+    max-width: 88%;
+    border-radius: 12px;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.7rem;
+    border: 1px solid rgba(16, 42, 36, 0.1);
+}
+
+.chat-bubble.user {
+    margin-left: auto;
+    background: #dff3e8;
+}
+
+.chat-bubble.assistant {
+    margin-right: auto;
+    background: #ffffff;
+}
+
+.chat-meta {
+    font-size: 0.72rem;
+    color: #5f7a70;
+    margin-bottom: 0.2rem;
+}
+
+.chat-content {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 #blazor-error-ui {
     display: none;
     position: fixed;
@@ -185,5 +249,16 @@ body {
 
     .hero-panel {
         padding: 1.75rem;
+    }
+}
+
+@media (max-width: 959px) {
+    .chat-stream {
+        min-height: 34vh;
+        max-height: 42vh;
+    }
+
+    .session-list {
+        max-height: 26vh;
     }
 }

@@ -339,6 +339,18 @@ public sealed class OpenClawGatewayClient : IAsyncDisposable
       idempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString()
     }, ct);
 
+  /// <summary>
+  /// Returns chat history for a session using the chat-native endpoint.
+  /// This is typically less restrictive than sessions.history.
+  /// </summary>
+  public Task<SessionHistoryResult> ChatHistoryAsync(
+    string sessionKey, int? limit = null, CancellationToken ct = default)
+  {
+    var d = new Dictionary<string, object?> { ["sessionKey"] = sessionKey };
+    if (limit.HasValue) d["limit"] = limit.Value;
+    return CallAsync<SessionHistoryResult>("chat.history", d, ct);
+  }
+
   // ─── Agent ─────────────────────────────────────────────────────────────────
 
   /// <summary>
