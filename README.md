@@ -70,6 +70,49 @@ Body:
 { "ok": true, "payload": { } }
 ```
 
+## Docker — McpServer
+
+镜像名：**`gilzhang/verdure-openclaw-mcpserver:v0.1.0`**
+
+### 构建并推送
+
+> 构建 context 必须是仓库根目录。
+
+```bash
+# 构建
+docker build -f OpenClaw.McpServer/Dockerfile \
+  -t gilzhang/verdure-openclaw-mcpserver:v0.1.0 \
+  -t gilzhang/verdure-openclaw-mcpserver:latest \
+  .
+
+# 推送
+docker push gilzhang/verdure-openclaw-mcpserver:v0.1.0
+docker push gilzhang/verdure-openclaw-mcpserver:latest
+```
+
+### 拉取并运行（服务器）
+
+```bash
+docker run -d \
+  --name verdure-openclaw-mcpserver \
+  -p 5223:5223 \
+  -e OpenClaw__GatewayUrl=ws://host.docker.internal:18789 \
+  -e OpenClaw__Token=你的token \
+  -e OpenClaw__ApiKey=你的apikey \
+  --add-host host.docker.internal:host-gateway \
+  --restart unless-stopped \
+  gilzhang/verdure-openclaw-mcpserver:v0.1.0
+```
+
+> `--add-host host.docker.internal:host-gateway` 在 Linux 服务器上必填，Docker Desktop (Windows/macOS) 不需要。  
+> `OpenClaw__GatewayUrl` 填宿主机上运行的 OpenClaw gateway WebSocket 地址。
+
+### MCP 端点
+
+容器启动后，MCP Streamable HTTP 地址：`http://<host>:5223/mcp`
+
+---
+
 ## 说明
 - 目前 `OpenClawDefaults.ProtocolVersion = 1`。如果你的 gateway 协议版本不是 1，需要从 OpenClaw 源码同步 `PROTOCOL_VERSION`。
 - 目前只实现 token auth（connect.auth.token）。设备签名/设备 token 机制后续可加。
